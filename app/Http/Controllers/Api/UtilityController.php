@@ -104,6 +104,185 @@ class UtilityController extends Controller
 	}
 
 	/**
+	 * POST /api/v1/image/process
+	 * Comprehensive image processing endpoint supporting multiple operations
+	 * multipart/form-data:
+	 * - file: image file (required)
+	 * - operations: JSON string with operations array, or individual params:
+	 *   - resize: {width, height?}
+	 *   - crop: {x, y, width, height}
+	 *   - rotate: degrees (0-360)
+	 *   - filter: grayscale|brightness|contrast|saturation
+	 *   - filter_value: value for filter (-100 to 100 for brightness/contrast, 0-200 for saturation)
+	 *   - watermark: text to overlay
+	 *   - format: jpeg|png|webp (default: jpeg)
+	 *   - quality: 1-100 (default: 85)
+	 */
+	public function processImage(Request $request)
+	{
+		$file = $request->file('file');
+		if (!$file || !$file->isValid()) {
+			return response()->json(['error' => 'Invalid or missing file'], Response::HTTP_BAD_REQUEST);
+		}
+
+		$data = @file_get_contents($file->getRealPath());
+		if ($data === false) {
+			return response()->json(['error' => 'Failed to read image data'], Response::HTTP_BAD_REQUEST);
+		}
+
+		$src = @imagecreatefromstring($data);
+		if ($src === false) {
+			return response()->json(['error' => 'Unsupported image format'], Response::HTTP_UNSUPPORTED_MEDIA_TYPE);
+		}
+
+		$img = $src;
+		$operations = [];
+
+		// Parse operations (can be JSON string or individual params)
+		$opsJson = $request->input('operations');
+		if ($opsJson) {
+			$ops = json_decode($opsJson, true);
+			if (json_last_error() === JSON_ERROR_NONE && is_array($ops)) {
+				$operations = $ops;
+			}
+		}
+
+		// Apply resize
+		if ($request->has('width') || isset($operations['resize'])) {
+			$resize = $operations['resize'] ?? ['width' => $request->input('width'), 'height' => $request->input('height')];
+			$width = (int) ($resize['width'] ?? 0);
+			$height = isset($resize['height']) ? (int) $resize['height'] : null;
+			if ($width > 0) {
+				$srcW = imagesx($img);
+				$srcH = imagesy($img);
+				if ($height === null || $height <= 0) {
+					$ratio = $srcH / $srcW;
+					$height = (int) round($width * $ratio);
+				}
+				$newImg = imagescale($img, $width, $height, IMG_BICUBIC);
+				if ($newImg !== false) {
+					imagedestroy($img);
+					$img = $newImg;
+				}
+			}
+		}
+
+		// Apply crop
+		if ($request->has('crop_x') || isset($operations['crop'])) {
+			$crop = $operations['crop'] ?? [
+				'x' => $request->input('crop_x'),
+				'y' => $request->input('crop_y'),
+				'width' => $request->input('crop_width'),
+				'height' => $request->input('crop_height'),
+			];
+			$x = (int) ($crop['x'] ?? 0);
+			$y = (int) ($crop['y'] ?? 0);
+			$cropW = (int) ($crop['width'] ?? 0);
+			$cropH = (int) ($crop['height'] ?? 0);
+			if ($cropW > 0 && $cropH > 0) {
+				$newImg = imagecrop($img, ['x' => $x, 'y' => $y, 'width' => $cropW, 'height' => $cropH]);
+				if ($newImg !== false) {
+					imagedestroy($img);
+					$img = $newImg;
+				}
+			}
+		}
+
+		// Apply rotate
+		if ($request->has('rotate') || isset($operations['rotate'])) {
+			$degrees = (float) ($operations['rotate'] ?? $request->input('rotate', 0));
+			if ($degrees != 0) {
+				$bgColor = imagecolorallocatealpha($img, 255, 255, 255, 127);
+				$newImg = imagerotate($img, -$degrees, $bgColor);
+				if ($newImg !== false) {
+					imagealphablending($newImg, false);
+					imagesavealpha($newImg, true);
+					imagedestroy($img);
+					$img = $newImg;
+				}
+			}
+		}
+
+		// Apply filters
+		if ($request->has('filter') || isset($operations['filter'])) {
+			$filter = $operations['filter'] ?? $request->input('filter');
+			$filterValue = (int) ($operations['filter_value'] ?? $request->input('filter_value', 0));
+			
+			switch ($filter) {
+				case 'grayscale':
+					imagefilter($img, IMG_FILTER_GRAYSCALE);
+					break;
+				case 'brightness':
+					$filterValue = max(-100, min(100, $filterValue));
+					imagefilter($img, IMG_FILTER_BRIGHTNESS, $filterValue);
+					break;
+				case 'contrast':
+					$filterValue = max(-100, min(100, $filterValue));
+					imagefilter($img, IMG_FILTER_CONTRAST, $filterValue);
+					break;
+				case 'saturation':
+					// Saturation is approximated via colorize
+					$filterValue = max(0, min(200, $filterValue));
+					$sat = (int) (($filterValue - 100) * 2.55);
+					imagefilter($img, IMG_FILTER_COLORIZE, 0, 0, 0, $sat);
+					break;
+			}
+		}
+
+		// Apply watermark
+		if ($request->has('watermark') || isset($operations['watermark'])) {
+			$watermarkText = $operations['watermark'] ?? $request->input('watermark');
+			if ($watermarkText) {
+				$fontSize = 5;
+				$textColor = imagecolorallocate($img, 255, 255, 255);
+				$bgColor = imagecolorallocate($img, 0, 0, 0);
+				$textWidth = imagefontwidth($fontSize) * strlen($watermarkText);
+				$textHeight = imagefontheight($fontSize);
+				$imgWidth = imagesx($img);
+				$imgHeight = imagesy($img);
+				$x = $imgWidth - $textWidth - 10;
+				$y = $imgHeight - $textHeight - 10;
+				imagestring($img, $fontSize, $x + 1, $y + 1, $watermarkText, $bgColor);
+				imagestring($img, $fontSize, $x, $y, $watermarkText, $textColor);
+			}
+		}
+
+		// Output format
+		$format = strtolower((string) ($operations['format'] ?? $request->input('format', 'jpeg')));
+		$quality = (int) ($operations['quality'] ?? $request->input('quality', 85));
+		$quality = max(1, min(100, $quality));
+
+		ob_start();
+		$contentType = 'image/jpeg';
+		switch ($format) {
+			case 'png':
+				$contentType = 'image/png';
+				imagealphablending($img, false);
+				imagesavealpha($img, true);
+				imagepng($img);
+				break;
+			case 'webp':
+				$contentType = 'image/webp';
+				if (function_exists('imagewebp')) {
+					imagewebp($img, null, $quality);
+				} else {
+					$contentType = 'image/jpeg';
+					imagejpeg($img, null, $quality);
+				}
+				break;
+			default:
+				imagejpeg($img, null, $quality);
+		}
+		imagedestroy($img);
+		$binary = ob_get_clean();
+
+		return response($binary, 200, [
+			'Content-Type' => $contentType,
+			'Content-Disposition' => 'inline; filename="processed.' . $format . '"',
+		]);
+	}
+
+	/**
 	 * POST /api/v1/image/resize
 	 * multipart/form-data:
 	 * - file: image file

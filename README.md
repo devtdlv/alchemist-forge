@@ -5,14 +5,18 @@
 
 ## Overview
 
-AlchemistForge is a lightweight, versioned API that ships a shelf of small but powerful developer utilities:
+AlchemistForge is a lightweight, versioned API that provides a suite of developer utilities:
 
-- Slugification
-- Timezone conversion
-- Currency conversion (via exchangerate.host)
-- Random test data generation (users, addresses, text, etc.)
-- Image resizing (GD, no extra deps)
-- QR code generation (optional)
+**Fully Implemented:**
+- ✅ **Slugification** - Convert text to URL-friendly slugs
+- ✅ **Timezone Conversion** - Convert datetime between timezones
+- ✅ **Currency Conversion** - Real-time currency conversion (via exchangerate.host)
+- ✅ **Image Processing** - Comprehensive image operations: resize, crop, rotate, filters (grayscale, brightness, contrast, saturation), watermark, format conversion
+- ✅ **Image Resizing** - Simple resize endpoint (alternative to /image/process)
+- ✅ **Random Test Data** - Generate realistic test data (users, addresses, companies, text)
+
+**Optional/Coming Soon:**
+- ⚠️ **QR Code Generation** - Requires package installation (see below)
 
 The app is built on Laravel 12 (PHP 8.2) and exposes endpoints under `/api/v1`.
 
@@ -95,11 +99,54 @@ GET `/api/v1/random?type={user|address|company|text}&count=1`
 curl "http://127.0.0.1:8000/api/v1/random?type=user&count=2"
 ```
 
-### 5) Image Resize
+### 5) Image Processing
+POST `/api/v1/image/process`
+
+**Fully implemented** - Comprehensive image processing using PHP GD (no additional dependencies required).
+
+Supports multiple operations in a single request:
+- **Resize**: `width`, `height` (optional, preserves aspect if omitted)
+- **Crop**: `crop_x`, `crop_y`, `crop_width`, `crop_height`
+- **Rotate**: `rotate` (degrees, 0-360)
+- **Filters**: `filter` (grayscale|brightness|contrast|saturation), `filter_value` (-100 to 100 for brightness/contrast, 0-200 for saturation)
+- **Watermark**: `watermark` (text to overlay)
+- **Format**: `format` (jpeg|png|webp, default: jpeg)
+- **Quality**: `quality` (1-100, default: 85)
+
+**Option 1: Individual parameters**
+```bash
+curl -s -X POST \
+  -F "file=@/path/to/image.jpg" \
+  -F "width=512" \
+  -F "filter=grayscale" \
+  -F "rotate=90" \
+  -F "watermark=AlchemistForge" \
+  -F "format=webp" \
+  "http://127.0.0.1:8000/api/v1/image/process" > out.webp
+```
+
+**Option 2: JSON operations object**
+```bash
+curl -s -X POST \
+  -F "file=@/path/to/image.jpg" \
+  -F 'operations={"resize":{"width":512},"filter":"grayscale","rotate":90,"watermark":"AlchemistForge","format":"webp"}' \
+  "http://127.0.0.1:8000/api/v1/image/process" > out.webp
+```
+
+**Examples:**
+- Resize and convert to grayscale: `-F "width=800" -F "filter=grayscale"`
+- Crop a region: `-F "crop_x=100" -F "crop_y=100" -F "crop_width=400" -F "crop_height=300"`
+- Rotate 90 degrees: `-F "rotate=90"`
+- Adjust brightness: `-F "filter=brightness" -F "filter_value=20"`
+- Add watermark: `-F "watermark=© 2025"`
+
+### 6) Image Resize (Simple)
 POST `/api/v1/image/resize`
 
+**Fully implemented** - Simple resize endpoint (alternative to `/image/process`).
+
 Form fields:
-- `file` (required): image file
+- `file` (required): image file (JPEG, PNG, or WebP)
 - `width` (required): target width (int)
 - `height` (optional): target height (int). If omitted, preserves aspect ratio.
 - `format` (optional): `jpeg|png|webp` (default `jpeg`)
@@ -114,14 +161,21 @@ curl -s -X POST \
   "http://127.0.0.1:8000/api/v1/image/resize" > out.webp
 ```
 
-### 6) QR Code (Optional)
+**Note:** Requires PHP GD extension (usually included with PHP). WebP support depends on your PHP build.
+
+### 7) QR Code Generation (Not Yet Implemented)
 GET `/api/v1/qr?text=Hello&size=256`
 
-By default, the route returns a `501 Not Implemented` and suggests an install:
+**Status:** Currently returns `501 Not Implemented`. To enable:
+
+1. Install the QR code package:
 ```bash
 composer require simplesoftwareio/simple-qrcode
 ```
-Then wire it in `UtilityController::generateQr`.
+
+2. Update `app/Http/Controllers/Api/UtilityController::generateQr()` to implement the QR generation logic.
+
+The endpoint is stubbed and ready for implementation.
 
 ## Project Scripts
 
@@ -144,10 +198,12 @@ They cover core endpoints (slugify, timezone conversion, image resize, random da
 
 ## Tech Stack
 
-- Laravel 12 (PHP ^8.2)
-- Vite 7 (optional for assets), Tailwind 4 preset (inline)
-- Faker for random data
-- PHP GD for image processing
+- **Laravel 12** (PHP ^8.2)
+- **PHP GD** - Built-in image resizing (JPEG, PNG, WebP)
+- **Faker** - Random test data generation
+- **Carbon** - Timezone conversion
+- **Laravel HTTP Client** - Currency conversion API calls
+- **Vite 7** (optional for frontend assets), Tailwind 4 preset (inline)
 
 ## License
 

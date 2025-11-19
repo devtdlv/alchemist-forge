@@ -39,9 +39,16 @@ Route::prefix('v1')->group(function () {
 				],
 				[
 					'method' => 'POST',
+					'path' => '/api/v1/image/process',
+					'form' => ['file' => 'image/*', 'operations' => 'JSON or individual params: resize, crop, rotate, filter, watermark, format, quality'],
+					'description' => 'Comprehensive image processing: resize, crop, rotate, filters (grayscale, brightness, contrast, saturation), watermark, format conversion.',
+					'example_curl' => 'curl -s -F "file=@/path/to/image.jpg" -F "width=512" -F "filter=grayscale" -F "format=webp" ' . url('/api/v1/image/process') . ' > out.webp',
+				],
+				[
+					'method' => 'POST',
 					'path' => '/api/v1/image/resize',
 					'form' => ['file' => 'image/*', 'width' => 512, 'height' => '(optional)', 'format' => 'jpeg|png|webp'],
-					'description' => 'Resize an image using GD.',
+					'description' => 'Resize an image using GD (simpler alternative to /image/process).',
 					'example_curl' => 'curl -s -F "file=@/path/to/image.jpg" -F "width=512" ' . url('/api/v1/image/resize') . ' > out.jpg',
 				],
 				[
@@ -58,6 +65,7 @@ Route::prefix('v1')->group(function () {
 	Route::get('/timezone/convert', [UtilityController::class, 'convertTimezone']);
 	Route::get('/currency/convert', [UtilityController::class, 'convertCurrency']);
 	Route::get('/random', [UtilityController::class, 'randomData']);
+	Route::post('/image/process', [UtilityController::class, 'processImage']);
 	Route::post('/image/resize', [UtilityController::class, 'resizeImage']);
 	Route::get('/qr', [UtilityController::class, 'generateQr']); // may require optional dependency
 });

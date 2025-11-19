@@ -54,6 +54,31 @@ class UtilityApiTest extends TestCase
 		$response = $this->getJson('/api/v1/qr?text=Hello');
 		$response->assertStatus(501);
 	}
+
+	public function test_image_process_endpoint(): void
+	{
+		// Create a tiny 20x20 png
+		$image = imagecreatetruecolor(20, 20);
+		$color = imagecolorallocate($image, 100, 150, 200);
+		imagefill($image, 0, 0, $color);
+		ob_start();
+		imagepng($image);
+		$pngData = ob_get_clean();
+		imagedestroy($image);
+		$this->assertNotFalse($pngData);
+
+		$file = UploadedFile::fake()->createWithContent('test.png', $pngData);
+		
+		// Test resize + grayscale
+		$response = $this->post('/api/v1/image/process', [
+			'file' => $file,
+			'width' => 10,
+			'filter' => 'grayscale',
+			'format' => 'png',
+		]);
+		$response->assertOk();
+		$this->assertTrue(Str::startsWith($response->headers->get('Content-Type'), 'image/'));
+	}
 }
 
 

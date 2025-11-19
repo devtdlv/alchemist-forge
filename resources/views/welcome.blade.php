@@ -294,12 +294,26 @@
                 <div class="endpoint-card">
                     <div class="endpoint-header">
                         <div class="endpoint-title-group">
+                            <h3 class="endpoint-title">Image Processing</h3>
+                            <span class="endpoint-method post">POST</span>
+                        </div>
+                    </div>
+                    <div class="endpoint-path">/api/v1/image/process</div>
+                    <p class="endpoint-description">Comprehensive image operations: resize, crop, rotate, filters (grayscale, brightness, contrast, saturation), watermark, and format conversion.</p>
+                    <span class="endpoint-link disabled">
+                        Requires file upload
+                    </span>
+                </div>
+
+                <div class="endpoint-card">
+                    <div class="endpoint-header">
+                        <div class="endpoint-title-group">
                             <h3 class="endpoint-title">Image Resize</h3>
                             <span class="endpoint-method post">POST</span>
                         </div>
                     </div>
                     <div class="endpoint-path">/api/v1/image/resize</div>
-                    <p class="endpoint-description">Resize and optimize images with support for JPEG, PNG, and WebP formats. Accepts multipart/form-data.</p>
+                    <p class="endpoint-description">Simple resize endpoint (alternative to /image/process). Resize and optimize images with support for JPEG, PNG, and WebP formats.</p>
                     <span class="endpoint-link disabled">
                         Requires file upload
                     </span>
